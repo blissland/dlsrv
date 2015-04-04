@@ -98,6 +98,7 @@ func main() {
       break
     }
   }
+  time.Sleep(2000 * time.Millisecond)
   fmt.Println("Listening on: 127.0.0.1:9696")
   http.HandleFunc("/", handler)
   http.ListenAndServe(":9696", nil)
