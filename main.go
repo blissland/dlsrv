@@ -5,7 +5,10 @@ import (
   "os"
   "net/http"
   "time"
+  "strconv"
 )
+
+var pid int
 
 type DownloadFile struct {
   Filename string
@@ -16,12 +19,25 @@ type DownloadFile struct {
   LastSize int64
 } 
 
+func (f *DownloadFile) procRunning(pid int) (bool) {
+  proc, err := os.FindProcess(pid)
+  if err != nil || proc == nil {
+    return false
+  } else {
+    return true
+  }
+}
+
 func (f *DownloadFile) haveData(size int) (bool) {
   var ret = false
   s, _ := f.File.Stat()
   currSize := s.Size()
   if currSize == f.LastSize {
-    ret = true
+    if pid > 0 && f.procRunning(pid) {
+      ret = false
+    } else {
+      ret = true
+    }
   } else if (f.Offset + int64(size)) < currSize {
     ret = true
   } else {
@@ -46,7 +62,6 @@ func (f *DownloadFile) Read(p []byte) (n int, err error) {
   f.Offset += int64(n)
   return n, err
 }
-
 
 func (f *DownloadFile) Seek(offset int64, whence int) (int64, error) {
   if whence == os.SEEK_SET {
@@ -85,11 +100,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-  if len(os.Args) != 2 {
-    fmt.Println("Usage: dlsrv filename")
+  numargs := len(os.Args)
+  if !(numargs == 2 || numargs == 3) {
+    fmt.Println("Usage: dlsrv filename [pid]")
     os.Exit(1)
   }
   fname = os.Args[1]
+  if numargs == 3 {
+    pid, _ = strconv.Atoi(os.Args[2])
+  }
 
   for i:=0;i<20;i++  {
     if _, err := os.Stat(fname); os.IsNotExist(err) {
@@ -98,8 +117,8 @@ func main() {
       break
     }
   }
-  time.Sleep(2000 * time.Millisecond)
-  fmt.Println("Listening on: 127.0.0.1:9696")
+  time.Sleep(4000 * time.Millisecond)
+  fmt.Println("Listening on: 127.0.0.1:9696") 
   http.HandleFunc("/", handler)
   http.ListenAndServe(":9696", nil)
 }
