@@ -6,9 +6,13 @@ import (
   "net/http"
   "time"
   "strconv"
+  "log"
+  "syscall"
 )
 
 var pid int
+
+var DEBUG = false
 
 type DownloadFile struct {
   Filename string
@@ -20,12 +24,20 @@ type DownloadFile struct {
 } 
 
 func (f *DownloadFile) procRunning(pid int) (bool) {
+  ret := true
   proc, err := os.FindProcess(pid)
-  if err != nil || proc == nil {
-    return false
+  if err != nil {
+    ret = false
   } else {
-    return true
+    err := proc.Signal(syscall.Signal(0))
+    if err != nil {
+      ret = false
+    }
   }
+  if DEBUG {
+    log.Println("PROCESS RUNNING: ", ret)
+  }
+  return ret
 }
 
 func (f *DownloadFile) haveData(size int) (bool) {
@@ -47,11 +59,17 @@ func (f *DownloadFile) haveData(size int) (bool) {
 }
 
 func (f *DownloadFile) Read(p []byte) (n int, err error) {
+  if DEBUG {
+    log.Println("READ: ", len(p))
+  }
   size := len(p)
   for !f.haveData(size) {
     time.Sleep(2000 * time.Millisecond)
   }
   if f.DoSeek {
+    if DEBUG {
+      log.Println("SEEK: ", f.Offset)
+    }
     f.Offset, err = f.File.Seek(f.Offset, os.SEEK_SET)
     if err != nil {
       fmt.Println(err)
@@ -60,6 +78,9 @@ func (f *DownloadFile) Read(p []byte) (n int, err error) {
   }
   n, err = f.File.Read(p)
   f.Offset += int64(n)
+  if DEBUG {
+    log.Println("RET: ", n, err)
+  }
   return n, err
 }
 
@@ -117,8 +138,13 @@ func main() {
       break
     }
   }
-  time.Sleep(4000 * time.Millisecond)
+  time.Sleep(2000 * time.Millisecond)
   fmt.Println("Listening on: 127.0.0.1:9696") 
   http.HandleFunc("/", handler)
+  if DEBUG {
+    f, _ := os.Create("/tmp/dlsrv.out")
+    log.SetOutput(f)
+    defer f.Close()
+  }
   http.ListenAndServe(":9696", nil)
 }
